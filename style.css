@@ -1,0 +1,155 @@
+:root {
+    --color-correct: #538d4e;
+    --color-present: #b59f3b;
+    --color-absent: #3a3a3c;
+    --color-default: #121213;
+    --color-border: #3a3a3c;
+    --color-text: #ffffff;
+    --key-bg: #818384;
+}
+
+body {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent scrolling on mobile */
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Board Layout */
+#board-container {
+    width: 100%;
+    max-width: 500px;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+.board-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 5px;
+    width: 100%;
+}
+
+/* Tile Styles */
+.tile {
+    width: 100%;
+    max-width: 50px; /* Max size for desktop */
+    aspect-ratio: 1 / 1;
+    border: 2px solid var(--color-border);
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    margin: 0 2px;
+    user-select: none;
+    transition: transform 0.15s linear, background-color 0.3s ease;
+}
+
+/* Space Handling */
+.tile.space {
+    border: none;
+    background: transparent;
+    width: 20px; /* Narrower for spaces */
+    max-width: 20px;
+}
+
+.tile[data-state='active'] {
+    border-color: #818384;
+    animation: pop 0.1s;
+}
+
+.tile[data-state='correct'] {
+    background-color: var(--color-correct);
+    border-color: var(--color-correct);
+}
+
+.tile[data-state='present'] {
+    background-color: var(--color-present);
+    border-color: var(--color-present);
+}
+
+.tile[data-state='absent'] {
+    background-color: var(--color-absent);
+    border-color: var(--color-absent);
+}
+
+/* Keyboard */
+.keyboard {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.keyboard-row {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+    gap: 6px;
+}
+
+.key {
+    flex: 1;
+    height: 58px;
+    border-radius: 4px;
+    background-color: var(--key-bg);
+    color: white;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.2rem;
+    user-select: none;
+    touch-action: manipulation;
+}
+
+.key-wide {
+    flex: 1.5;
+    font-size: 1rem;
+}
+
+/* Demo tiles in modal */
+.demo-tile {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+}
+.demo-tile.correct { background-color: var(--color-correct); }
+.demo-tile.present { background-color: var(--color-present); }
+.demo-tile.absent { background-color: var(--color-absent); }
+
+/* Animations */
+@keyframes pop {
+    50% { transform: scale(1.1); }
+}
+
+@keyframes flip {
+    0% { transform: rotateX(0); }
+    50% { transform: rotateX(90deg); }
+    100% { transform: rotateX(0); }
+}
+
+.flip {
+    animation: flip 0.5s ease forwards;
+}
+
+/* Responsive adjustments for very long phrases */
+@media (max-width: 400px) {
+    .tile {
+        font-size: 1.1rem;
+        margin: 0 1px;
+    }
+}
