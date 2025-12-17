@@ -11,14 +11,16 @@ const MEMES = [
   "dittatrice",
   "zaya mbriaca",
   "shampoo",
-  "concerto di flauti",
   "brainrot",
   "pingu",
   "davide",
   "salsa alle alici",
+  "io palla",
   "professori pakistani",
+  "suvvia",
+  "skimited",
+  "trapano",
   "gigabatta",
-  "flaxia",
   "orlando",
   "cristoteca",
   "shuttle bus",
@@ -43,23 +45,21 @@ const MEMES = [
   "penicillina",
   "giovanni two",
   "gleatz",
+  "flaxia",
   "giorgida",
   "twei",
   "banconota da duemila won",
   "ola ha la centoquattro",
-  "suvvia",
-  "skimited",
-  "trapano",
   "porridge nel microonde",
   "shahzoda",
   "bunny bunny",
   "doccia di toma",
-  "io palla",
   "camminata grissinbon",
-  "cafe onion"
+  "concerto di flauti",
+  "caffe onion"
 ];
 
-const EPOCH = new Date(2025, 11, 12); // 12 Dicembre 2025 (Mese 0 = Gennaio)
+const EPOCH = new Date(2025, 11, 17); // 17 Dicembre 2025 (Mese 0 = Gennaio)
 
 /* --- LOGICA DI GIOCO --- */
 
@@ -93,6 +93,15 @@ let gameState = {
 
 document.addEventListener('DOMContentLoaded', () => {
     initGame();
+    
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            applyResponsiveTileSizing();
+        }, 100);
+    });
+
     setupKeyboard();
     setupModals();
 });
@@ -114,7 +123,7 @@ function initGame() {
     
     // 3. Calcolo Tentativi: formula clamp(ceil(L/2)+2, 4, 10)
     const L = normalizedTarget.length;
-    maxAttempts = Math.min(Math.max(Math.ceil(L / 2) + 2, 4), 10);
+    maxAttempts = clamp(Math.ceil(L * 0.6) + 2, 5, 12);
     
     document.getElementById('attempts-left').textContent = maxAttempts;
 
@@ -142,6 +151,7 @@ function initGame() {
 
     // 5. Costruzione Griglia
     createGrid();
+    applyResponsiveTileSizing();
 
     // 6. Ripristino visuale tentativi precedenti (MODIFICA QUI)
     gameState.guesses.forEach((guess, index) => {
@@ -251,6 +261,38 @@ function handleKey(key) {
         }
     }
 }
+
+function clamp(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+}
+
+function applyResponsiveTileSizing() {
+    const board = document.getElementById('board-container');
+    if (!board) return;
+
+    const cols = displayTarget.length;
+    if (!cols) return;
+
+    const gap = 4; // deve combaciare con --tile-gap in CSS
+    const spaceCount = (displayTarget.match(/ /g) || []).length;
+    const letterCount = cols - spaceCount;
+
+    const available = board.clientWidth - gap * (cols - 1);
+    // Spazi ~45% di una tile lettera (semplice e modificabile)
+    const denom = Math.max(1, letterCount + spaceCount * 0.45);
+
+    let tile = Math.floor(available / denom);
+    tile = clamp(tile, 18, 50);
+
+    const space = Math.max(10, Math.floor(tile * 0.45));
+    const fontPx = Math.max(12, Math.floor(tile * 0.55));
+
+    board.style.setProperty('--tile-size', `${tile}px`);
+    board.style.setProperty('--space-size', `${space}px`);
+    board.style.setProperty('--tile-font', `${fontPx}px`);
+    board.style.setProperty('--tile-gap', `${gap}px`);
+}
+
 
 document.addEventListener('keydown', (e) => {
     const key = e.key.toUpperCase();
