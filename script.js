@@ -659,8 +659,7 @@ function setupModals() {
 
     if (dateInput) {
         dateInput.min = formatLocalDate(EPOCH);
-        const lastMemeDate = getDateForGlobalIndex(MEMES.length - 1);
-        dateInput.max = formatLocalDate(lastMemeDate);
+        // Nessun limite massimo: il gioco cicla i meme all'infinito
     }
 
     playDateBtn?.addEventListener('click', () => {
