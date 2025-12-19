@@ -61,6 +61,29 @@ const MEMES = [
 
 const EPOCH = new Date(2025, 11, 17); // 17 Dicembre 2025 (Mese 0 = Gennaio)
 
+// Restituisce YYYY-MM-DD in fuso locale (no shift UTC)
+function formatLocalDate(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// Restituisce la data odierna a mezzanotte locale (evita shift di fuso)
+function getTodayLocalMidnight() {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+// Ritorna la data (mezzanotte locale) per l'indice globale del meme
+function getDateForGlobalIndex(globalIndex) {
+    const base = new Date(EPOCH);
+    base.setHours(0, 0, 0, 0);
+    base.setDate(base.getDate() + globalIndex);
+    return base;
+}
+
 /* --- LOGICA DI GIOCO --- */
 
 let currentMeme = "";
@@ -81,14 +104,18 @@ const KEYBOARD_LAYOUT = [
 // Stato iniziale
 let gameState = {
     lastPlayedDate: null,
-    guesses: [], // Array di stringhe normalizzate
-    gameStatus: 'IN_PROGRESS', // 'IN_PROGRESS', 'WIN', 'FAIL'
+    guesses: [],
+    gameStatus: 'IN_PROGRESS',
     stats: {
         played: 0,
         wins: 0,
         streak: 0,
         lastWinDate: null
-    }
+    },
+    history: [],
+    cycle: null,
+    isManualDateMode: false,
+    manualDate: null // YYYY-MM-DD quando in modalita manuale
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -104,74 +131,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setupKeyboard();
     setupModals();
+    setupHistoryModal();
 });
 
-function initGame() {
+function initGame(targetDateOverride = null) {
     loadState();
     
-    // 1. Selezione Daily
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const dayIndex = getDayIndex(today);
-    
+    // 1. Selezione Daily o Manuale
+    const today = getTodayLocalMidnight();
+    const baseDate = targetDateOverride ? new Date(targetDateOverride) : today;
+    if (isNaN(baseDate.getTime())) {
+        showMessage('Data non valida');
+        return;
+    }
+    baseDate.setHours(0,0,0,0);
+    const dayIndex = getDayIndex(baseDate);
+    const currentCycle = Math.floor(dayIndex / MEMES.length);
+    const dayInCycle = dayIndex % MEMES.length;
+
+    // Se è una partita manuale, non alteriamo stats/storico persistenti
+    const manualMode = !!targetDateOverride;
+    gameState.isManualDateMode = manualMode;
+    gameState.manualDate = manualMode ? formatLocalDate(baseDate) : null;
+
+    // Reset storia e stato giornaliero quando l'array MEMES ricomincia (solo daily)
+    if (!manualMode && (gameState.cycle === null || gameState.cycle !== currentCycle)) {
+        gameState.cycle = currentCycle;
+        gameState.history = [];
+        gameState.lastPlayedDate = null;
+        gameState.guesses = [];
+        gameState.gameStatus = 'IN_PROGRESS';
+        saveState();
+    }
+
     // Seleziona meme (loop se finiscono)
-    const memeRaw = MEMES[dayIndex % MEMES.length];
-    
+    const memeRaw = MEMES[dayInCycle];
+
     // 2. Normalizzazione
-    displayTarget = memeRaw.toUpperCase().replace(/\s+/g, ' '); // Singolo spazio per display
+    displayTarget = memeRaw.toUpperCase().replace(/\s+/g, ' ');
     normalizedTarget = normalizeForCompare(memeRaw);
     
-    // 3. Calcolo Tentativi: formula clamp(ceil(L/2)+2, 4, 10)
+    // Precompila lo storico per i giorni passati non giocati (solo ciclo corrente, non manuale)
+    if (!manualMode) {
+        const historyUpdated = prefillHistory(dayIndex, currentCycle, dayInCycle);
+        if (historyUpdated) saveState();
+    }
+
+    // 3. Calcolo Tentativi
     const L = normalizedTarget.length;
     maxAttempts = clamp(Math.ceil(L * 0.6) + 2, 5, 12);
     
     document.getElementById('attempts-left').textContent = maxAttempts;
 
-    // 4. Controllo Reset Giornaliero
+    // 4. Controllo Reset Giornaliero (solo daily)
     const savedDate = gameState.lastPlayedDate;
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = formatLocalDate(today);
 
-    if (savedDate !== todayStr) {
-        // Nuovo giorno, reset partita ma mantieni stats
-        gameState.lastPlayedDate = todayStr;
+    if (!manualMode) {
+        if (savedDate !== todayStr) {
+            gameState.lastPlayedDate = todayStr;
+            gameState.guesses = [];
+            gameState.gameStatus = 'IN_PROGRESS';
+            gameState.rowIndex = 0;
+            currentRow = 0;
+            isGameOver = false;
+            saveState();
+        } else {
+            currentRow = gameState.guesses.length;
+            currentGuess = [];
+            isGameOver = gameState.gameStatus !== 'IN_PROGRESS';
+        }
+    } else {
+        // Modalita manuale: sempre partita nuova senza toccare lo stato salvato
+        currentRow = 0;
+        currentGuess = [];
+        isGameOver = false;
         gameState.guesses = [];
         gameState.gameStatus = 'IN_PROGRESS';
-        gameState.rowIndex = 0;
-        currentRow = 0;
-        isGameOver = false;
-        saveState();
-    } else {
-        // Ripristina stato odierno
-        currentRow = gameState.guesses.length;
-        isGameOver = gameState.gameStatus !== 'IN_PROGRESS';
     }
 
-    // Aggiorna il contatore visivo sottraendo i tentativi già fatti
+    // Aggiorna il contatore visivo
     document.getElementById('attempts-left').textContent = maxAttempts - currentRow;
 
     // 5. Costruzione Griglia
+    resetKeyboardColors();
     createGrid();
     applyResponsiveTileSizing();
 
-    // 6. Ripristino visuale tentativi precedenti (MODIFICA QUI)
-    gameState.guesses.forEach((guess, index) => {
-        // Ricolora le righe già inviate
-        applyColorLogic(guess, index, false); 
-        
-        // Se stiamo ricaricando le lettere inviate, dobbiamo anche popolare
-        // visivamente il testo dentro le celle (che applyColorLogic usa ma non scriveva esplicitamente nel DOM se vuote)
-        const rowDiv = document.querySelector(`.board-row[data-row="${index}"]`);
-        const tiles = Array.from(rowDiv.querySelectorAll('.tile:not(.space)'));
-        guess.split('').forEach((char, charIndex) => {
-            tiles[charIndex].textContent = char;
+    // 6. Ripristino visuale tentativi precedenti (solo daily)
+    if (!manualMode) {
+        gameState.guesses.forEach((guess, index) => {
+            applyColorLogic(guess, index, false);
+            const rowDiv = document.querySelector(`.board-row[data-row="${index}"]`);
+            const tiles = Array.from(rowDiv.querySelectorAll('.tile:not(.space)'));
+            guess.split('').forEach((char, charIndex) => {
+                tiles[charIndex].textContent = char;
+            });
         });
-    });
+    }
 
     // Se la partita è finita, mostra il messaggio
     if (isGameOver) {
         if(gameState.gameStatus === 'WIN') showMessage("Bentornato! Hai già vinto oggi.");
         else showMessage("Meme di oggi: " + displayTarget, 5000);
     }
+
+    if (manualMode) {
+        showMessage(`Modalita data: ${formatLocalDate(baseDate)}`, 3500);
+    }
+}
+
+function resetKeyboardColors() {
+    document.querySelectorAll('.key').forEach(btn => {
+        btn.style.backgroundColor = 'var(--key-bg)';
+        btn.dataset.state = '';
+    });
 }
 
 
@@ -186,11 +260,38 @@ function normalizeForCompare(str) {
 }
 
 function getDayIndex(dateObj) {
-    const epochMidnight = new Date(EPOCH).setHours(0,0,0,0);
-    const todayMidnight = dateObj.getTime();
-    const diffTime = todayMidnight - epochMidnight;
+    const epochDate = new Date(EPOCH);
+    epochDate.setHours(0,0,0,0);
+    const current = new Date(dateObj);
+    current.setHours(0,0,0,0);
+    const diffTime = current.getTime() - epochDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    return Math.max(0, diffDays); // Evita indici negativi
+    return Math.max(0, diffDays);
+}
+
+function prefillHistory(dayIndex, currentCycle, dayInCycle) {
+    let updated = false;
+    const seen = new Set(gameState.history.map(entry => entry.date));
+    const cycleStartIndex = currentCycle * MEMES.length;
+
+    for (let offset = 0; offset < dayInCycle; offset++) {
+        const globalIndex = cycleStartIndex + offset;
+        const date = getDateForGlobalIndex(globalIndex);
+        const dateStr = formatLocalDate(date);
+        if (seen.has(dateStr)) continue;
+
+        const phraseRaw = MEMES[offset];
+        const phraseDisplay = phraseRaw.toUpperCase().replace(/\s+/g, ' ');
+        gameState.history.push({
+            date: dateStr,
+            phrase: phraseDisplay,
+            status: 'NOT_PLAYED',
+            attempts: 0
+        });
+        seen.add(dateStr);
+        updated = true;
+    }
+    return updated;
 }
 
 /* --- UI & GRID --- */
@@ -238,7 +339,7 @@ function updateActiveRow() {
         const letter = currentGuess[guessIdx] || '';
         tile.textContent = letter;
         tile.dataset.state = letter ? 'active' : 'empty';
-        if (letter) guessIdx++;
+        guessIdx++;
     });
 }
 
@@ -330,7 +431,7 @@ function setupKeyboard() {
 
 function createKeyBtn(keyVal, extraClass = '') {
     const btn = document.createElement('button');
-    btn.className = `key ${extraClass}`;
+    btn.className = `key${extraClass ? ' key-' + extraClass : ''}`;
     btn.textContent = keyVal.length > 1 ? '' : keyVal; // Icone per tasti speciali
     btn.dataset.key = keyVal;
     btn.onclick = () => handleKey(keyVal);
@@ -349,8 +450,10 @@ function submitGuess() {
     const guessString = currentGuess.join('');
     
     // 1. Aggiorna stato
-    gameState.guesses.push(guessString);
-    saveState();
+    if (!gameState.isManualDateMode) {
+        gameState.guesses.push(guessString);
+        saveState();
+    }
 
     // 2. Colora Griglia
     applyColorLogic(guessString, currentRow, true);
@@ -436,25 +539,37 @@ function updateKeyColor(letter, newState) {
 function handleWin() {
     isGameOver = true;
     gameState.gameStatus = 'WIN';
-    updateStats(true);
+    if (!gameState.isManualDateMode) {
+        updateStats(true);
+        pushHistoryEntry('WIN');
+        saveState();
+        renderHistory();
+    }
     showMessage("Grande! Meme indovinato!", 2000);
-    saveState();
-    setTimeout(() => {
-        const modal = new bootstrap.Modal(document.getElementById('statsModal'));
-        modal.show();
-    }, 1500);
+    if (!gameState.isManualDateMode) {
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('statsModal'));
+            modal.show();
+        }, 1500);
+    }
 }
 
 function handleLoss() {
     isGameOver = true;
     gameState.gameStatus = 'FAIL';
-    updateStats(false);
-    showMessage(displayTarget, -1); // Mostra per sempre
-    saveState();
-    setTimeout(() => {
-        const modal = new bootstrap.Modal(document.getElementById('statsModal'));
-        modal.show();
-    }, 1500);
+    if (!gameState.isManualDateMode) {
+        updateStats(false);
+        pushHistoryEntry('FAIL');
+        saveState();
+        renderHistory();
+    }
+    showMessage(displayTarget, -1);
+    if (!gameState.isManualDateMode) {
+        setTimeout(() => {
+            const modal = new bootstrap.Modal(document.getElementById('statsModal'));
+            modal.show();
+        }, 1500);
+    }
 }
 
 function showMessage(msg, duration = 2000) {
@@ -488,9 +603,10 @@ function loadState() {
     const stored = localStorage.getItem('memeWordle_state');
     if (stored) {
         const parsed = JSON.parse(stored);
-        // Merge shallow per evitare errori se aggiungi campi in futuro
-        gameState = { ...gameState, ...parsed, stats: { ...gameState.stats, ...parsed.stats } };
+        gameState = { ...gameState, ...parsed, stats: { ...gameState.stats, ...parsed.stats }, history: parsed.history || [] };
     }
+    gameState.isManualDateMode = false;
+    gameState.manualDate = null;
     updateStatsUI();
 }
 
@@ -533,4 +649,97 @@ function setupModals() {
         document.getElementById('countdown').textContent = 
             `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
     }, 1000);
+
+    // Gestione modal data
+    const playDateBtn = document.getElementById('play-date-btn');
+    const playTodayBtn = document.getElementById('play-today-btn');
+    const dateInput = document.getElementById('date-picker');
+    const dateModalEl = document.getElementById('dateModal');
+    const dateModal = new bootstrap.Modal(dateModalEl);
+
+    if (dateInput) {
+        dateInput.min = formatLocalDate(EPOCH);
+        const lastMemeDate = getDateForGlobalIndex(MEMES.length - 1);
+        dateInput.max = formatLocalDate(lastMemeDate);
+    }
+
+    playDateBtn?.addEventListener('click', () => {
+        if (!dateInput.value) {
+            showMessage('Seleziona una data valida');
+            return;
+        }
+        initGame(dateInput.value);
+        dateModal.hide();
+    });
+
+    playTodayBtn?.addEventListener('click', () => {
+        initGame(null);
+        dateModal.hide();
+    });
+
+    dateModalEl.addEventListener('hidden.bs.modal', () => {
+        // Non cambiare modalità se l'utente chiude senza scegliere
+    });
+}
+
+function renderHistory() {
+    const list = document.getElementById('history-list');
+    if (!list) return;
+
+    list.innerHTML = '';
+    if (!gameState.history || gameState.history.length === 0) {
+        list.innerHTML = '<div class="list-group-item history-item text-secondary">Nessun dato nello storico.</div>';
+        return;
+    }
+
+    const sorted = [...gameState.history].sort((a, b) => b.date.localeCompare(a.date));
+    sorted.forEach(entry => {
+        const item = document.createElement('div');
+        item.className = 'list-group-item history-item';
+
+        const textBox = document.createElement('div');
+        textBox.className = 'history-text';
+        textBox.innerHTML = `<strong>${entry.phrase}</strong><span class="history-date">${entry.date}</span>`;
+
+        const badge = document.createElement('span');
+        let badgeClass = 'badge-neutral';
+        let badgeText = 'Non giocato';
+        if (entry.status === 'WIN') {
+            badgeClass = 'badge-win';
+            badgeText = 'Indovinato';
+        } else if (entry.status === 'FAIL') {
+            badgeClass = 'badge-fail';
+            badgeText = 'Non indovinato';
+        }
+        badge.className = `badge ${badgeClass}`;
+        badge.textContent = badgeText;
+
+        item.appendChild(textBox);
+        item.appendChild(badge);
+        list.appendChild(item);
+    });
+}
+
+function pushHistoryEntry(status) {
+    const todayStr = formatLocalDate(getTodayLocalMidnight());
+    const existingIdx = gameState.history.findIndex(entry => entry.date === todayStr);
+    const entry = {
+        date: todayStr,
+        phrase: displayTarget,
+        status,
+        attempts: gameState.guesses.length
+    };
+
+    if (existingIdx >= 0) {
+        gameState.history[existingIdx] = entry;
+    } else {
+        gameState.history.push(entry);
+    }
+}
+
+function setupHistoryModal() {
+    const historyModalEl = document.getElementById('historyModal');
+    historyModalEl.addEventListener('shown.bs.modal', () => {
+        renderHistory();
+    });
 }

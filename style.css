@@ -142,6 +142,46 @@ body {
 .demo-tile.present { background-color: var(--color-present); }
 .demo-tile.absent { background-color: var(--color-absent); }
 
+/* History list */
+.history-list {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    color: var(--color-text);
+    background-color: transparent;
+    border-color: var(--color-border);
+}
+
+.history-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.95rem;
+}
+
+.history-date {
+    color: #9ca3af;
+    font-size: 0.8rem;
+}
+
+.badge-win {
+    background-color: var(--color-correct);
+}
+
+.badge-fail {
+    background-color: var(--color-absent);
+}
+
+.badge-neutral {
+    background-color: #6b7280;
+}
+
 /* Animations */
 @keyframes pop {
     50% { transform: scale(1.1); }

@@ -15,9 +15,14 @@
 
     <!-- Header -->
     <header class="d-flex justify-content-between align-items-center p-3 border-bottom border-secondary">
-        <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#helpModal">
-            <i class="fas fa-circle-question"></i>
-        </button>
+        <div class="d-flex gap-2">
+            <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#historyModal">
+                <i class="fas fa-clock-rotate-left"></i>
+            </button>
+            <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#dateModal" title="Scegli una data">
+                <i class="fas fa-calendar-day"></i>
+            </button>
+        </div>
         <h1 class="h4 m-0 fw-bold text-uppercase tracking-wider">GLEATLE</h1>
         <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#statsModal">
             <i class="fas fa-chart-bar"></i>
@@ -48,33 +53,37 @@
         </div>
     </div>
 
-    <!-- Help Modal -->
-    <div class="modal fade" id="helpModal" tabindex="-1" aria-hidden="true">
+    <!-- History Modal -->
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content bg-dark text-light border-secondary">
                 <div class="modal-header border-secondary">
-                    <h5 class="modal-title">Come giocare</h5>
+                    <h5 class="modal-title">Storico Frasi</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div id="history-list" class="list-group list-group-flush history-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Picker Modal -->
+    <div class="modal fade" id="dateModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title">Scegli una data</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <p>Indovina la frase o il meme del gruppo!</p>
-                    <ul>
-                        <li>Ogni tentativo deve essere valido.</li>
-                        <li>Gli spazi sono visibili ma contano solo le lettere.</li>
-                        <li>Il colore delle celle cambierà per mostrare quanto sei vicino.</li>
-                    </ul>
-                    <div class="d-flex gap-2 mb-2">
-                        <div class="demo-tile correct">A</div>
-                        <span class="align-self-center">Lettera corretta, posto giusto.</span>
-                    </div>
-                    <div class="d-flex gap-2 mb-2">
-                        <div class="demo-tile present">B</div>
-                        <span class="align-self-center">Lettera presente, posto sbagliato.</span>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <div class="demo-tile absent">C</div>
-                        <span class="align-self-center">Lettera non presente.</span>
-                    </div>
+                    <label for="date-picker" class="form-label">Data</label>
+                    <input type="date" class="form-control" id="date-picker">
+                    <small class="text-secondary">La partita su una data scelta non verrà conteggiata nelle statistiche.</small>
+                </div>
+                <div class="modal-footer border-secondary">
+                    <button type="button" class="btn btn-outline-secondary" id="play-today-btn">Torna a oggi</button>
+                    <button type="button" class="btn btn-primary" id="play-date-btn">Gioca data</button>
                 </div>
             </div>
         </div>
